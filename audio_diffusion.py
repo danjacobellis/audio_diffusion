@@ -62,3 +62,35 @@ def tf_to_pil(x):
 def pil_to_tf(x):
     x = np.array(x)
     return tf.convert_to_tensor(x)
+
+def σ_prior(band):
+    def sc(z,μ,σ,γ):
+        return sp.stats.skewcauchy.pdf(z, γ, loc=μ, scale=σ)
+    return 10000*(2*sc(band,20,100,0.9)+sc(band,22,12,0.5))
+
+def img_to_mdct(img):
+    X = []
+    q = 256;
+    Y = pil_to_tf(img)
+    Y = tf.cast(Y,tf.float32)/q
+    for i_band in range(512):
+        band = Y[:,i_band]
+        σ = σ_prior(i_band)
+        X.append(Finv(band,0,σ,0.85))
+    X = tf.stack(X)
+    X = tf.transpose(X)
+    X = tf.where(tf.math.is_inf(X), tf.ones_like(X), X)
+    return tf.cast(X,tf.float32)
+
+def mdct_to_img(X):
+    Y = []
+    q = 256;
+    for i_band in range(512):
+        band = X[:,i_band]
+        σ = σ_prior(i_band)
+        Y.append(F(band,0,σ,0.85))
+    Y = tf.stack(Y)
+    Y = tf.transpose(Y)
+    Y = tf.round(q*Y)
+    Y = tf.cast(Y,tf.uint8)
+    return tf_to_pil(Y)
